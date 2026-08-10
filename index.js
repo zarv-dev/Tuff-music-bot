@@ -10,6 +10,15 @@ const {
 } = require('@discordjs/voice');
 const play = require('play-dl');
 
+// PASS YOUTUBE COOKIE TO PLAY-DL TO BYPASS BOT DETECTION
+if (process.env.YOUTUBE_COOKIE) {
+    play.setToken({
+        youtube: {
+            cookie: process.env.YOUTUBE_COOKIE
+        }
+    });
+}
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
