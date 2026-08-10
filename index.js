@@ -6,11 +6,15 @@ const {
     createAudioResource, 
     AudioPlayerStatus, 
     VoiceConnectionStatus, 
-    entersState 
+    entersState,
+    generateDependencyReport 
 } = require('@discordjs/voice');
 const play = require('play-dl');
 
-// PASS YOUTUBE COOKIE TO PLAY-DL TO BYPASS BOT DETECTION
+// Log voice dependency report on startup
+console.log(generateDependencyReport());
+
+// Pass YouTube cookie to play-dl to bypass bot detection
 if (process.env.YOUTUBE_COOKIE) {
     play.setToken({
         youtube: {
@@ -58,6 +62,8 @@ client.on('messageCreate', async (message) => {
         let videoUrl = '';
         let videoTitle = '';
         let videoDuration = '';
+
+        // Validate if input is a direct video link or search query
         const validation = await play.yt_validate(input);
 
         if (validation === 'video') {
@@ -74,16 +80,32 @@ client.on('messageCreate', async (message) => {
             videoTitle = ytResults[0].title;
             videoDuration = ytResults[0].durationRaw;
         }
-      
+
+        // Connect to Voice Channel with selfDeaf enabled
         const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
             guildId: message.guild.id,
             adapterCreator: message.guild.voiceAdapterCreator,
+            selfDeaf: true,
         });
 
-        await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+        // Debug logging for connection states
+        connection.on(VoiceConnectionStatus.Connecting, () => {
+            console.log('Connecting to voice channel...');
+        });
 
-        const stream = await play.stream(videoUrl);
+        connection.on(VoiceConnectionStatus.Ready, () => {
+            console.log('Voice connection ready!');
+        });
+
+        // Extended 30-second handshake timeout
+        await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+
+        // Fetch YouTube audio stream with discord player compatibility
+        const stream = await play.stream(videoUrl, {
+            discordPlayerCompatibility: true
+        });
+
         const resource = createAudioResource(stream.stream, {
             inputType: stream.type,
         });
@@ -94,6 +116,7 @@ client.on('messageCreate', async (message) => {
 
         await statusMsg.edit(`Now playing: **${videoTitle}** (${videoDuration})`);
 
+        // Disconnect when playback ends
         player.on(AudioPlayerStatus.Idle, () => {
             connection.destroy();
         });
